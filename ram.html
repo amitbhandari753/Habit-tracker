@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Amit's Habit Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #e2e8f0;
+      text-align: center;
+    }
+
+    h1 { margin: 10px; font-weight: 600; }
+
+    .top-bar {
+      margin: 10px;
+    }
+
+    input, select {
+      padding: 6px;
+      border-radius: 6px;
+      border: none;
+      background: #334155;
+      color: white;
+    }
+
+    button {
+      padding: 5px;
+      margin: 2px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+    }
+
+    table {
+      border-collapse: collapse;
+      background: #1e293b;
+      margin: auto;
+    }
+
+    th, td {
+      border: 1px solid #475569;
+      padding: 4px;
+      font-size: 11px;
+    }
+
+    .done { background: #22c55e; color: white; }
+    .notdone { background: #ef4444; color: white; }
+
+    /* 🔥 Improved delete icon */
+    .deleteBtn {
+      background: transparent;
+      color: #f87171;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .deleteBtn:hover {
+      color: #ef4444;
+      transform: scale(1.2);
+    }
+
+    .chart-box {
+      width: 420px;
+      margin: auto;
+      margin-top: 20px;
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 10px;
+    }
+
+    /* 🔥 New boxes */
+    .extra-box {
+      margin: 10px auto;
+      width: 420px;
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 10px;
+      text-align: left;
+    }
+
+    .extra-box input {
+      width: 100%;
+      margin-top: 5px;
+    }
+
+    .quote {
+      font-size: 14px;
+      opacity: 0.8;
+      margin-bottom: 10px;
+    }
+
+  </style>
+</head>
+
+<body>
+
+<h1>Amit's Habit Tracker</h1>
+<div class="quote">"Consistency builds discipline, discipline builds success."</div>
+
+<div class="top-bar">
+  <select id="monthSelect"></select>
+  <input id="habitInput" placeholder="New Habit">
+  <button onclick="addHabit()">Add</button>
+</div>
+
+<!-- 🔥 NEW SECTION -->
+<div class="extra-box">
+  <label>🎯 Weekly Target</label>
+  <input id="weeklyTarget" placeholder="Enter weekly goal">
+
+  <label>🎯 Monthly Target</label>
+  <input id="monthlyTarget" placeholder="Enter monthly goal">
+
+  <label>💭 Thought of the Day</label>
+  <input id="thought" placeholder="Write something positive...">
+</div>
+
+<div style="overflow-x:auto;">
+  <table>
+    <thead id="thead"></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<div class="chart-box">
+  <canvas id="dailyChart"></canvas>
+  <canvas id="weeklyChart"></canvas>
+  <canvas id="compareChart"></canvas>
+  <p id="progressText"></p>
+</div>
+
+<script>
+
+// ================= DATA =================
+let habits = JSON.parse(localStorage.getItem("habits")) || [
+  "Wake Up Early","Workout","Study","Drink Water"
+];
+
+const monthSelect = document.getElementById("monthSelect");
+
+// Month dropdown
+for(let i=0;i<12;i++){
+  let opt = document.createElement("option");
+  opt.value = i;
+  opt.text = new Date(2024,i).toLocaleString('default',{month:'long'});
+  monthSelect.appendChild(opt);
+}
+
+// ================= EXTRA SAVE =================
+const weeklyInput = document.getElementById("weeklyTarget");
+const monthlyInput = document.getElementById("monthlyTarget");
+const thoughtInput = document.getElementById("thought");
+
+function saveExtra(){
+  let key = "extra_"+monthSelect.value;
+
+  let data = {
+    weekly: weeklyInput.value,
+    monthly: monthlyInput.value,
+    thought: thoughtInput.value
+  };
+
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+function loadExtra(){
+  let key = "extra_"+monthSelect.value;
+  let data = JSON.parse(localStorage.getItem(key)) || {};
+
+  weeklyInput.value = data.weekly || "";
+  monthlyInput.value = data.monthly || "";
+  thoughtInput.value = data.thought || "";
+}
+
+weeklyInput.oninput = saveExtra;
+monthlyInput.oninput = saveExtra;
+thoughtInput.oninput = saveExtra;
+
+// ================= HABIT =================
+function addHabit(){
+  let val = document.getElementById("habitInput").value;
+  if(!val) return;
+
+  habits.push(val);
+  localStorage.setItem("habits", JSON.stringify(habits));
+  document.getElementById("habitInput").value = "";
+
+  createTable();
+}
+
+function deleteHabit(index){
+  habits.splice(index,1);
+  localStorage.setItem("habits", JSON.stringify(habits));
+  createTable();
+}
+
+// ================= TABLE =================
+function getDays(){
+  let m = parseInt(monthSelect.value);
+  return new Date(2024, m+1, 0).getDate();
+}
+
+function createTable(){
+
+  let days = getDays();
+
+  let thead = "<tr><th>Habit</th>";
+  for(let d=1; d<=days; d++){
+    thead += "<th>"+d+"</th>";
+  }
+  thead += "</tr>";
+  document.getElementById("thead").innerHTML = thead;
+
+  let body = "";
+
+  habits.forEach((h,i)=>{
+    body += "<tr><td>"+h+" <button class='deleteBtn' onclick='deleteHabit("+i+")'>✖</button></td>";
+
+    for(let d=1; d<=days; d++){
+      body += `<td>
+        <button onclick="setStatus(${i},${d},1)" id="done_${i}_${d}">✔</button>
+        <button onclick="setStatus(${i},${d},0)" id="not_${i}_${d}">✖</button>
+      </td>`;
+    }
+
+    body += "</tr>";
+  });
+
+  document.getElementById("tableBody").innerHTML = body;
+
+  loadData();
+  loadExtra();
+}
+
+// ================= STORAGE =================
+function setStatus(h,d,val){
+  let key = "data_"+monthSelect.value;
+  let data = JSON.parse(localStorage.getItem(key)) || {};
+
+  data["h"+h+"d"+d] = val;
+
+  localStorage.setItem(key, JSON.stringify(data));
+
+  updateUI();
+  updateCharts();
+}
+
+function loadData(){
+  updateUI();
+  updateCharts();
+}
+
+// ================= UI =================
+function updateUI(){
+
+  let key = "data_"+monthSelect.value;
+  let data = JSON.parse(localStorage.getItem(key)) || {};
+  let days = getDays();
+
+  for(let h=0;h<habits.length;h++){
+    for(let d=1;d<=days;d++){
+
+      let val = data["h"+h+"d"+d];
+
+      let done = document.getElementById(`done_${h}_${d}`);
+      let not = document.getElementById(`not_${h}_${d}`);
+
+      if(done && not){
+        done.className = val==1 ? "done" : "";
+        not.className = val==0 ? "notdone" : "";
+      }
+    }
+  }
+}
+
+// ================= CHART =================
+let dailyChart, weeklyChart, compareChart;
+
+function updateCharts(){
+
+  let m = parseInt(monthSelect.value);
+
+  let current = JSON.parse(localStorage.getItem("data_"+m)) || {};
+  let prev = JSON.parse(localStorage.getItem("data_"+(m-1))) || {};
+
+  let days = getDays();
+
+  let daily = [];
+  let weekly = [0,0,0,0,0];
+  let currentTotal = 0;
+  let prevTotal = 0;
+
+  for(let d=1; d<=days; d++){
+
+    let count = 0;
+
+    for(let h=0;h<habits.length;h++){
+
+      if(current["h"+h+"d"+d] == 1){
+        count++;
+        currentTotal++;
+      }
+
+      if(prev["h"+h+"d"+d] == 1){
+        prevTotal++;
+      }
+    }
+
+    daily.push(count);
+
+    let w = Math.floor((d-1)/7);
+    if(w<5) weekly[w]+=count;
+  }
+
+  let percent = Math.round((currentTotal/(habits.length*days))*100);
+  document.getElementById("progressText").innerText = "Progress: "+percent+"%";
+
+  if(dailyChart) dailyChart.destroy();
+  if(weeklyChart) weeklyChart.destroy();
+  if(compareChart) compareChart.destroy();
+
+  dailyChart = new Chart(document.getElementById("dailyChart"), {
+    type: "line",
+    data: { labels: daily.map((_,i)=>i+1), datasets:[{label:"Daily",data:daily}] }
+  });
+
+  weeklyChart = new Chart(document.getElementById("weeklyChart"), {
+    type: "bar",
+    data: { labels:["W1","W2","W3","W4","W5"], datasets:[{label:"Weekly",data:weekly}] }
+  });
+
+  compareChart = new Chart(document.getElementById("compareChart"), {
+    type: "bar",
+    data: {
+      labels:["Last Month","This Month"],
+      datasets:[{label:"Comparison", data:[prevTotal,currentTotal]}]
+    }
+  });
+}
+
+// ================= INIT =================
+monthSelect.onchange = createTable;
+createTable();
+
+</script>
+
+</body>
+</html>
